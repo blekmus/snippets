@@ -121,6 +121,27 @@ def bunny_upload(filename, title):
     uploader.upload()
 
 
+# send slack message through webhook for success and errors
+def send_slack_message(message, type):
+    if type == "success":
+        color = "#36a64f"
+    elif type == "error":
+        color = "#ff0000"
+    else:
+        color = "#000000"
+
+    slack_message = {
+        "attachments": [
+            {
+                "color": color,
+                "text": message,
+            }
+        ]
+    }
+
+    response = requests.post(os.environ["SLACK_WEBHOOK_URL"], json=slack_message)
+    logging.debug(response.text)
+
 
 def main():
     # check if the script has arguments
@@ -168,6 +189,7 @@ def main():
     except Exception as err:
         logging.error("Failed to download the recording")
         logging.error(err)
+        send_slack_message(f"Failed to download the recording: {err}", "error")
         sys.exit(1)
 
     # upload recording to b2 bucket
@@ -177,6 +199,7 @@ def main():
         logging.error("Failed to upload recordings to b2 bucket")
         logging.error(err)
         os.remove(f"{filename}.mp4")
+        send_slack_message(f"Failed to upload recordings to b2 bucket\n\n{err}", "error")
         sys.exit(1)
 
     # upload recording to bunny stream
@@ -186,10 +209,14 @@ def main():
         logging.error("Failed to upload recordings to bunny stream")
         logging.error(err)
         os.remove(f"{filename}.mp4")
+        send_slack_message(f"Failed to upload recordings to bunny stream", "error")
         sys.exit(1)
 
     # remove the recording
     os.remove(f"{filename}.mp4")
+
+    # slack message
+    send_slack_message(f"Successfully uploaded {filename} to bunny stream", "success")
 
     logging.info("Successfully uploaded the recording")
 
@@ -204,6 +231,3 @@ args = sys.argv
 
 if __name__ == "__main__":
     main()
-
-
-
